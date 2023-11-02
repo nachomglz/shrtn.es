@@ -8,7 +8,8 @@
   "license": "MIT",
   "scripts": {
     "start": "tsc && node build/index.js",
-    "dev": "nodemon src/index.ts"
+    "dev": "nodemon src/index.ts",
+    "resetDb": "node scripts/reset_db.js"
   },
   "dependencies": {
     "express": "^4.18.2",

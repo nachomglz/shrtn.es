@@ -30,7 +30,7 @@ export default class UrlController {
         // get the shortened url from the request if one, if not return all the urls
         const { shortened_url } = req.query
         if (shortened_url) {
-            const url = db.get<Url>(
+            db.get<Url>(
                 'SELECT * FROM url WHERE shortened_url = ? OR original_url = ?',
                 [shortened_url, shortened_url],
                 (error, row) => {
@@ -112,19 +112,30 @@ export default class UrlController {
             }
         }
 
-        // insert the url into the db
+        const expirationDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
         db.run(
             'INSERT INTO url (expiration_date, original_url, shortened_url) VALUES (?, ?, ?)',
-            new Date(),
-            url,
-            finalSuggestion
-        )
-
-        res.send({
-            ok: true,
-            data: {
-                shortened_path: finalSuggestion
+            [expirationDate, url, finalSuggestion],
+            function(error) {
+                if (error) {
+                    return res.status(500).send({
+                        ok: false,
+                        data: {
+                            message: 'Something went wrong while creating the url'
+                        }
+                    })
+                }
+                return res.send({
+                    ok: true,
+                    data: {
+                        id: this.lastID,
+                        expiration_date: expirationDate,
+                        original_url: url,
+                        shortened_url: finalSuggestion
+                    }
+                })
+            
             }
-        })
+        )
     }
 }
