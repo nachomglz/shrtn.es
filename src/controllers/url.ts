@@ -30,20 +30,33 @@ export default class UrlController {
         // get the shortened url from the request if one, if not return all the urls
         const { shortened_url } = req.query
         if (shortened_url) {
-            const url = db.get<Url>('SELECT * FROM url WHERE shortened_url = ?', shortened_url)
-            if (url) {
-                return res.send({
-                    ok: true,
-                    data: url
-                })
-            } else {
-                return res.status(404).send({
-                    ok: false,
-                    data: {
-                        message: 'Url not found'
+            const url = db.get<Url>(
+                'SELECT * FROM url WHERE shortened_url = ? OR original_url = ?',
+                [shortened_url, shortened_url],
+                (error, row) => {
+                    if (error) {
+                        return res.status(500).send({
+                            ok: false,
+                            data: {
+                                message: 'Something went wrong while fetching the url'
+                            }
+                        })
                     }
-                })
-            }
+                    if (row) {
+                        return res.send({
+                            ok: true,
+                            data: row
+                        })
+                    } else {
+                        return res.status(404).send({
+                            ok: false,
+                            data: {
+                                message: 'Url not found'
+                            }
+                        })
+                    }
+                }
+            )
         } else {
             const urls = db.all<Url>('SELECT * FROM url', (error, rows) => {
                 if (error) {
