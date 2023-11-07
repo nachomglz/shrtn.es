@@ -8,9 +8,9 @@ db.serialize(() => {
     db.run(`
         CREATE table if not exists url (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            expiration_date DATETIME,
+            expiration_date TEXT,
             original_url TEXT,
-            shortened_url TEXT
+            shortened_url TEXT UNIQUE
         );
     `, (error) => {
         if (error) {
