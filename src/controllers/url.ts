@@ -208,4 +208,51 @@ export default class UrlController {
         )
 
     }
+
+    public static redirectToUrl(req: Request, res: Response) {
+        const { shortened_url } = req.params
+
+        if (!shortened_url) {
+            return res.status(400).send({
+                ok: false,
+                data: {
+                    message: 'Missing shortened_url param'
+                }
+            })
+        }
+
+        db.get<Url>(
+            'SELECT * FROM url WHERE shortened_url = ?',
+            [shortened_url],
+            (error, row) => {
+                if (error) {
+                    return res.status(500).send({
+                        ok: false,
+                        data: {
+                            message: 'Something went wrong while fetching the url'
+                        }
+                    })
+                }
+                if (row) {
+                    if (new Date(row.expiration_date) > new Date(Date.now())) {
+                        return res.redirect(row.original_url)
+                    } else {
+                        return res.status(404).send({
+                            ok: false,
+                            data: {
+                                message: 'Url not found'
+                            }
+                        })
+                    }
+                } else {
+                    return res.status(404).send({
+                        ok: false,
+                        data: {
+                            message: 'Url not found'
+                        }
+                    })
+                }
+            }
+        )
+    }
 }
