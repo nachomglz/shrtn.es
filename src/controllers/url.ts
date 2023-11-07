@@ -6,24 +6,32 @@ export default class UrlController {
         return new RegExp('^(http|https)://', 'i').test(url)
     }
 
-    static generateSuggestion(times_executed: number = 0): string | null {
-        const suggestion = Math.random().toString(36).substring(2, 15)
-        // if there's an error in the query try again 5 times, if its still failing return null
-        db.get<Url>('SELECT * FROM url WHERE shortened_url = ?', [suggestion], (err, row) => {
-            if (err) {
-                console.error(`[ERROR] ~ Checking suggestion: ${err}`)
-                if (times_executed < 5) {
-                    return UrlController.generateSuggestion(times_executed + 1)
-                } else {
-                    return null
-                }
-            }
+    static generateShortUrl(
+        suggestion: string = "",
+        callback: (error: Error | null, shortenedUrl: string | null) => void
+    ): void {
+        const suggestionRegex = /^[a-zA-Z0-9]{3,20}$/
+        let randomSuggestion = Math.random().toString(36).substring(2, 15)
 
-            if (row && row.id > 0) {
-                return UrlController.generateSuggestion()
-            }
-        })
-        return suggestion
+        if (suggestionRegex.test(suggestion) && suggestion) {
+            // check if that suggestion is already in the database
+            db.get<Url>(
+                'SELECT * FROM url WHERE shortened_url = ?',
+                [suggestion],
+                (error, row) => {
+                    if (error) {
+                        callback(new Error('Something went wrong while generating the url'), null)
+                    }
+                    if (row && row.id > 0) {
+                        callback(null, randomSuggestion)
+                    } else {
+                        callback(null, suggestion)
+                    }
+                }
+            )
+        } else {
+            callback(null, randomSuggestion)
+        }
     }
 
     public static getUrl(req: Request, res: Response) {
@@ -98,26 +106,13 @@ export default class UrlController {
             })
         }
 
-        const suggestionRegex = /^[a-zA-Z0-9]{3,20}$/
-        let finalSuggestion: string | null = suggestion
-        if (!suggestion || !suggestionRegex.test(suggestion)) {
-            finalSuggestion = UrlController.generateSuggestion()
-            if (finalSuggestion === null) {
-                return res.status(500).send({
-                    ok: false,
-                    data: {
-                        message: 'Something went wrong while generating the suggestion'
-                    }
-                })
-            }
-        }
-
-        const expirationDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
-        db.run(
-            'INSERT INTO url (expiration_date, original_url, shortened_url) VALUES (?, ?, ?)',
-            [expirationDate, url, finalSuggestion],
-            function(error) {
+        // check if the url provided is already in the database
+        db.get<Url>(
+            'SELECT * FROM url WHERE original_url = ?',
+            [url],
+            (error, row) => {
                 if (error) {
+                    console.error("Erro: ", error)
                     return res.status(500).send({
                         ok: false,
                         data: {
@@ -125,17 +120,92 @@ export default class UrlController {
                         }
                     })
                 }
-                return res.send({
-                    ok: true,
-                    data: {
-                        id: this.lastID,
-                        expiration_date: expirationDate,
-                        original_url: url,
-                        shortened_url: finalSuggestion
+                if (row && row.id > 0) {
+                    // if the url already exists and is not expired yet, return it
+                    if (new Date(row.expiration_date) > new Date(Date.now())) {
+                        return res.send({
+                            ok: true,
+                            data: row
+                        })
+                    } else {
+                        UrlController.generateShortUrl(suggestion, (error, finalSuggestion) => {
+                            if (error || !finalSuggestion) {
+                                return res.status(500).send({
+                                    ok: false,
+                                    data: {
+                                        message: 'Something went wrong while creating the url'
+                                    }
+                                })
+                            }
+
+                            const expirationDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+                            db.run(
+                                'INSERT INTO url (expiration_date, original_url, shortened_url) VALUES (?, ?, ?)',
+                                [expirationDate, url, finalSuggestion],
+                                function(error) {
+                                    if (error) {
+                                        return res.status(500).send({
+                                            ok: false,
+                                            data: {
+                                                message: 'Something went wrong while creating the url'
+                                            }
+                                        })
+                                    }
+                                    return res.send({
+                                        ok: true,
+                                        data: {
+                                            id: this.lastID,
+                                            expiration_date: expirationDate,
+                                            original_url: url,
+                                            shortened_url: finalSuggestion
+                                        }
+                                    })
+                                
+                                }
+                            )
+                        })
                     }
-                })
-            
+
+                } else {
+                    UrlController.generateShortUrl(suggestion, (error, finalSuggestion) => {
+                        if (error || !finalSuggestion) {
+                            return res.status(500).send({
+                                ok: false,
+                                data: {
+                                    message: 'Something went wrong while creating the url'
+                                }
+                            })
+                        }
+
+                        const expirationDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+                        db.run(
+                            'INSERT INTO url (expiration_date, original_url, shortened_url) VALUES (?, ?, ?)',
+                            [expirationDate, url, finalSuggestion],
+                            function(error) {
+                                if (error) {
+                                    return res.status(500).send({
+                                        ok: false,
+                                        data: {
+                                            message: 'Something went wrong while creating the url'
+                                        }
+                                    })
+                                }
+                                return res.send({
+                                    ok: true,
+                                    data: {
+                                        id: this.lastID,
+                                        expiration_date: expirationDate,
+                                        original_url: url,
+                                        shortened_url: finalSuggestion
+                                    }
+                                })
+                            
+                            }
+                        )
+                    })
+                }
             }
         )
+
     }
 }

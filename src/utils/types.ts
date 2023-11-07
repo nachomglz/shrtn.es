@@ -16,7 +16,7 @@ export interface Response<T = any> extends ExpressResponse {
 
 export interface Url {
     id: number,
-    expiration_date: Date,
+    expiration_date: string,
     original_url: string,
     shortened_url: string
 }
